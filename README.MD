@@ -1,11 +1,13 @@
+    
 # WP Zipper: Production-Ready WordPress Plugin & Theme Zipping Tool
 
-`wp-zipper` is a robust bash script designed to simplify the process of creating production-ready ZIP archives for your WordPress plugins and themes. It intelligently handles common development artifacts, Composer dependencies, and provides a clean, deployable package.
+`wp-zipper` is a robust bash script designed to simplify the process of creating production-ready ZIP archives for your WordPress plugins and themes. It intelligently handles common development artifacts, Composer dependencies, and allows for custom exclusions via a `.zipperignore` file, providing a clean, deployable package.
 
 ## Features
 
 *   **Dedicated Commands:** Use `zipplugin` for plugins and `ziptheme` for themes.
 *   **Automatic Exclusion:** Automatically skips common development files and directories like `.git`, `.gitignore`, `.vscode`, `node_modules`, `tests`, `bin`, `webpack.config.js`, `gulpfile.js`, and log files.
+*   **Custom Exclusions (`.zipperignore`):** Allows users to define their own set of files and folders to exclude, using a syntax similar to `.gitignore`.
 *   **Composer Integration:** If a `composer.json` file is detected, the script runs `composer install --no-dev --optimize-autoloader` in a temporary build environment. This ensures that only the necessary production dependencies are included in the `vendor/` directory of your final ZIP.
 *   **User Confirmation:** Prompts for confirmation to ensure you're zipping the correct project directory.
 *   **Clean Output:** Generates a `.zip` file named after your plugin/theme directory (e.g., `my-plugin.zip` or `my-theme.zip`), ready for deployment or distribution.
@@ -88,6 +90,54 @@ The script will create a `your-plugin-name.zip` file in the current directory.
 
 The script will create a `your-theme-name.zip` file in the current directory.
 
+## Custom Exclusions with `.zipperignore`
+
+The `wp-zipper` tool allows you to define additional files and directories to exclude from your final ZIP file using a `.zipperignore` file. This is useful for project-specific development assets or private files that should never be deployed.
+
+### How to Use `.zipperignore`
+
+1.  **Placement:** Create a file named `.zipperignore` in the **root directory of your plugin or theme** (the same directory where you would run `zipplugin` or `ziptheme`).
+
+2.  **Syntax:** The syntax for `.zipperignore` is similar to `.gitignore`:
+    *   Each line specifies a pattern.
+    *   Blank lines are ignored.
+    *   Lines starting with `#` are comments.
+    *   Patterns can be file names, directory names, or glob patterns.
+    *   A trailing `/` indicates a directory (e.g., `logs/`).
+    *   A leading `/` specifies that the pattern matches from the root of the project (e.g., `/config/local-settings.php`).
+    *   Wildcards like `*`, `?`, `[]` are supported.
+
+### `.zipperignore` Example:
+
+  #### Exclude specific files
+    ```
+    .env
+    my-secret-notes.txt
+    config/local-settings.php
+    ```
+
+  #### Exclude entire directories
+    ```
+    assets/src/
+    temp-files/
+    dist/
+    uploads/ # Common for themes if not handled by WordPress
+    ```
+  
+  #### Exclude all markdown files
+
+    `*.md`
+
+  #### Exclude specific file types anywhere in the project
+
+    ```
+    *.bak
+    ~*
+    ```
+
+
+The `wp-zipper` script will read this file and apply these custom exclusion rules in addition to its default exclusions.
+
 ## Requirements
 
 *   **Bash:** The script is written in Bash and requires a Bash environment.
@@ -95,6 +145,10 @@ The script will create a `your-theme-name.zip` file in the current directory.
     *   Debian/Ubuntu: `sudo apt install zip`
     *   CentOS/RHEL: `sudo yum install zip`
     *   macOS (Homebrew): `brew install zip` (usually pre-installed)
+*   **rsync Utility:** The `rsync` command-line utility must be installed on your system.
+    *   Debian/Ubuntu: `sudo apt install rsync`
+    *   CentOS/RHEL: `sudo yum install rsync`
+    *   macOS (Homebrew): `brew install rsync` (usually pre-installed)
 *   **Composer (Optional, but Recommended if you use it):** If your plugin or theme relies on Composer for dependency management, Composer must be installed globally (or available in your PATH) for the `composer install --no-dev` step to correctly bundle your production dependencies.
 
 ## Future Enhancements (Roadmap)
@@ -114,3 +168,5 @@ Contributions, bug reports, and feature requests are welcome! Please open issues
 ## License
 
 This project is open-source and available under the [MIT License](LICENSE).
+
+  
