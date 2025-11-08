@@ -42,17 +42,17 @@ die() {
 
 # Function to display success message
 success() {
-    echo -e "\033[0;32mSUCCESS:\003[0m $1"
+    echo -e "\033[0;32mSUCCESS:\003[0m $1" >&2
 }
 
 # Function to display info message
 info() {
-    echo -e "\033[0;36mINFO:\003[0m $1"
+    echo -e "\033[0;36mINFO:\003[0m $1" >&2
 }
 
 # Function to display warning message
 warn() {
-    echo -e "\033[0;33mWARNING:\003[0m $1"
+    echo -e "\033[0;33mWARNING:\003[0m $1" >&2
 }
 
 # Function to clean up temporary directory
@@ -94,6 +94,8 @@ get_exclude_list() {
                 final_excludes+=("$line")
             fi
         done < "$ZIPPERIGNORE_FILE"
+    else
+        warn "Nothing found as the ignore file $ZIPPERIGNORE_FILE."
     fi
 
     # Format for zip -x (each item prefixed with -x and quoted)
@@ -104,7 +106,7 @@ get_exclude_list() {
     echo "$zip_exclude_args"
 }
 
-# --- Main Logic ---
+
 
 # Determine if called as 'zipplugin' or 'ziptheme'
 SCRIPT_NAME=$(basename "$0")
@@ -161,45 +163,52 @@ fi
 info "Creating temporary build directory: $TEMP_BUILD_DIR"
 mkdir -p "$TEMP_BUILD_DIR" || die "Failed to create temporary build directory."
 
+
 # Get the combined list of exclusions (common + .zipperignore)
 # We handle composer.json/lock and vendor separately, so exclude them from the initial copy.
 CUSTOM_EXCLUDE_LIST=$(get_exclude_list "${EXCLUDE_COMMON[@]}")
 
+
+
 # --- Initial File Copy (excluding development-specific items and Composer files) ---
 info "Copying files to temporary build directory, excluding development files and .zipperignore items..."
-# Use rsync for robust copying with exclusions
-# We need to construct the exclude arguments for rsync.
-RSYNC_EXCLUDE_ARGS=""
+
+# Create a temporary file to hold all rsync exclusion patterns
+RSYNC_EXCLUDE_FILE=$(mktemp) || die "Failed to create temporary file for rsync exclusions."
+
+# Add common excludes to the temp file
+info "Adding common exclusion patterns..."
 for ITEM in "${EXCLUDE_COMMON[@]}"; do
-    # rsync exclude patterns are slightly different, they don't like quotes around wildcards for example.
-    # Adjusting for common patterns, but for complex .gitignore-like patterns
-    # Future improvememt of this implem would be including a dedicated tool that can handl complex patt.
-    if [[ "$ITEM" == *.log ]] || [[ "$ITEM" == *.md ]]; then
-        RSYNC_EXCLUDE_ARGS+=" --exclude='$ITEM'"
-    else
-        RSYNC_EXCLUDE_ARGS+=" --exclude='${ITEM}'"
-    fi
+    echo "$ITEM" >> "$RSYNC_EXCLUDE_FILE"
 done
 
-# Add exclusions from .zipperignore to rsync args
+# Add exclusions from .zipperignore to the temp file
 if [ -f "$ZIPPERIGNORE_FILE" ]; then
+    info "Adding custom exclusions from '$ZIPPERIGNORE_FILE'..."
+    # rsync --exclude-from can read patterns directly, which is cleaner.
     while IFS= read -r line; do
+        # Trim whitespace and skip comments/empty lines (rsync can handle comments, but we keep it clean)
         line=$(echo "$line" | xargs)
         if [[ -n "$line" && ! "$line" =~ ^# ]]; then
-            RSYNC_EXCLUDE_ARGS+=" --exclude='$line'"
+             echo "$line" >> "$RSYNC_EXCLUDE_FILE"
         fi
     done < "$ZIPPERIGNORE_FILE"
 fi
 
-# Explicitly exclude composer files for initial copy, as they are handled later
-RSYNC_EXCLUDE_ARGS+=" --exclude='composer.json' --exclude='composer.lock' --exclude='vendor'"
+# Explicitly exclude composer files for initial copy (handled later by Composer)
+info "Excluding Composer files and 'vendor' directory from initial copy..."
+echo "composer.json" >> "$RSYNC_EXCLUDE_FILE"
+echo "composer.lock" >> "$RSYNC_EXCLUDE_FILE"
+echo "vendor" >> "$RSYNC_EXCLUDE_FILE"
 
-# Execute rsync
-# rsync -a --exclude-from=<(get_rsync_exclude_patterns) . "$TEMP_BUILD_DIR/"
-# Simpler for now with direct args, but --exclude-from is better for many rules.
-if ! rsync -a . "$TEMP_BUILD_DIR/" $RSYNC_EXCLUDE_ARGS; then
+# Execute rsync using the --exclude-from option for robust pattern matching
+info "Executing rsync..."
+if ! rsync -a --exclude-from="$RSYNC_EXCLUDE_FILE" . "$TEMP_BUILD_DIR/"; then
     die "Failed to copy files using rsync to temporary build directory."
 fi
+
+# Clean up the temporary exclude file immediately
+rm "$RSYNC_EXCLUDE_FILE"
 
 
 # Handle Composer dependencies and vendor directory
